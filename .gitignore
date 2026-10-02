@@ -7,3 +7,8 @@ dist/
 .DS_Store
 .vercel
 *.pdf
+
+# credenciais e anotações privadas: nunca vão para o GitHub
+privado/
+*.pem
+*.key
