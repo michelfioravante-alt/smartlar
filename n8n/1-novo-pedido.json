@@ -1,0 +1,162 @@
+{
+  "name": "SmartLar | 1. Novo pedido -> Planilha",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartlar-novo-pedido",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000001",
+      "name": "Webhook: pedido criado",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "5b1f2c3d-1111-4a6b-9c1d-5a0000000001",
+      "credentials": {
+        "httpHeaderAuth": { "id": "", "name": "SmartLar Webhook" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "vw_pedidos",
+        "returnAll": true,
+        "filterType": "string",
+        "filterString": "=id=eq.{{ $json.body.pedido_id }}"
+      },
+      "id": "a1000000-0000-4000-8000-000000000002",
+      "name": "Buscar pedido completo",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [240, 0],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": { "id": "", "name": "Supabase SmartLar" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Só registra pedidos encontrados e que ainda não foram avisados.\nconst agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\nconst dt = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '');\n\nreturn $input.all()\n  .filter((i) => i.json.id && !i.json.notificado_em)\n  .map((i) => ({\n    json: {\n      registrado_em: agora,\n      pedido: i.json.numero,\n      cliente: i.json.cliente_nome,\n      telefone: i.json.cliente_telefone,\n      valor_total: Number(i.json.valor_total),\n      data_pedido: dt(i.json.created_at),\n      observacoes: i.json.observacoes ?? '',\n      origem: 'webhook (tempo real)'\n    }\n  }));"
+      },
+      "id": "a1000000-0000-4000-8000-000000000003",
+      "name": "Montar linha (webhook)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 15 }]
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000004",
+      "name": "A cada 15 min: recuperação",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 240]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "vw_pedidos",
+        "returnAll": true,
+        "filterType": "string",
+        "filterString": "=notificado_em=is.null&created_at=lt.{{ $now.minus({ minutes: 2 }).toUTC().toISO() }}&order=numero.asc"
+      },
+      "id": "a1000000-0000-4000-8000-000000000005",
+      "name": "Buscar pedidos sem aviso",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [240, 240],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": { "id": "", "name": "Supabase SmartLar" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pedidos que ficaram sem aviso (ex.: n8n fora do ar na hora do webhook).\nconst agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\nconst dt = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '');\n\nreturn $input.all()\n  .filter((i) => i.json.id && !i.json.notificado_em)\n  .map((i) => ({\n    json: {\n      registrado_em: agora,\n      pedido: i.json.numero,\n      cliente: i.json.cliente_nome,\n      telefone: i.json.cliente_telefone,\n      valor_total: Number(i.json.valor_total),\n      data_pedido: dt(i.json.created_at),\n      observacoes: i.json.observacoes ?? '',\n      origem: 'recuperação (rotina 15 min)'\n    }\n  }));"
+      },
+      "id": "a1000000-0000-4000-8000-000000000006",
+      "name": "Montar linha (recuperação)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 240]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "COLE_O_LINK_DA_PLANILHA", "mode": "url" },
+        "sheetName": { "__rl": true, "value": "Novos pedidos", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "a1000000-0000-4000-8000-000000000007",
+      "name": "Planilha: Novos pedidos",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [720, 120],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets SmartLar" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "pedidos",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [{ "keyName": "numero", "condition": "eq", "keyValue": "={{ $json.pedido }}" }]
+        },
+        "fieldsUi": {
+          "fieldValues": [{ "fieldId": "notificado_em", "fieldValue": "={{ $now.toUTC().toISO() }}" }]
+        }
+      },
+      "id": "a1000000-0000-4000-8000-000000000008",
+      "name": "Marcar pedido como avisado",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [960, 120],
+      "credentials": {
+        "supabaseApi": { "id": "", "name": "Supabase SmartLar" }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: pedido criado": {
+      "main": [[{ "node": "Buscar pedido completo", "type": "main", "index": 0 }]]
+    },
+    "Buscar pedido completo": {
+      "main": [[{ "node": "Montar linha (webhook)", "type": "main", "index": 0 }]]
+    },
+    "Montar linha (webhook)": {
+      "main": [[{ "node": "Planilha: Novos pedidos", "type": "main", "index": 0 }]]
+    },
+    "A cada 15 min: recuperação": {
+      "main": [[{ "node": "Buscar pedidos sem aviso", "type": "main", "index": 0 }]]
+    },
+    "Buscar pedidos sem aviso": {
+      "main": [[{ "node": "Montar linha (recuperação)", "type": "main", "index": 0 }]]
+    },
+    "Montar linha (recuperação)": {
+      "main": [[{ "node": "Planilha: Novos pedidos", "type": "main", "index": 0 }]]
+    },
+    "Planilha: Novos pedidos": {
+      "main": [[{ "node": "Marcar pedido como avisado", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "saveManualExecutions": true
+  }
+}

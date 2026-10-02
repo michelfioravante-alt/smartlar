@@ -1,0 +1,149 @@
+{
+  "name": "SmartLar | 3. Pedido concluído -> Faturamento",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smartlar-pedido-concluido",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "c3000000-0000-4000-8000-000000000001",
+      "name": "Webhook: pedido concluído",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "5b1f2c3d-1111-4a6b-9c1d-5a0000000003",
+      "credentials": {
+        "httpHeaderAuth": { "id": "", "name": "SmartLar Webhook" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "vw_pedidos",
+        "returnAll": true,
+        "filterType": "string",
+        "filterString": "=id=eq.{{ $json.body.pedido_id }}"
+      },
+      "id": "c3000000-0000-4000-8000-000000000002",
+      "name": "Buscar pedido concluído",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [240, 0],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": { "id": "", "name": "Supabase SmartLar" }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 15 }]
+        }
+      },
+      "id": "c3000000-0000-4000-8000-000000000003",
+      "name": "A cada 15 min: recuperação",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 240]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "vw_pedidos",
+        "returnAll": true,
+        "filterType": "string",
+        "filterString": "=status=eq.concluido&faturamento_registrado_em=is.null&concluido_em=lt.{{ $now.minus({ minutes: 2 }).toUTC().toISO() }}&order=numero.asc"
+      },
+      "id": "c3000000-0000-4000-8000-000000000004",
+      "name": "Buscar concluídos sem registro",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [240, 240],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": { "id": "", "name": "Supabase SmartLar" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Só pedidos concluídos e ainda não registrados no faturamento.\nconst agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\nconst dt = (iso) => (iso ? new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '');\nconst pagamento = {\n  pix: 'Pix',\n  cartao_credito: 'Cartão de crédito',\n  cartao_debito: 'Cartão de débito',\n  dinheiro: 'Dinheiro',\n  boleto: 'Boleto',\n  transferencia: 'Transferência'\n};\n\nreturn $input.all()\n  .filter((i) => i.json.id && i.json.status === 'concluido' && !i.json.faturamento_registrado_em)\n  .map((i) => ({\n    json: {\n      registrado_em: agora,\n      pedido: i.json.numero,\n      data_conclusao: dt(i.json.concluido_em),\n      cliente: i.json.cliente_nome,\n      valor: Number(i.json.valor_total),\n      forma_pagamento: pagamento[i.json.forma_pagamento] ?? i.json.forma_pagamento ?? '',\n      tecnico: i.json.tecnico_nome ?? ''\n    }\n  }));"
+      },
+      "id": "c3000000-0000-4000-8000-000000000005",
+      "name": "Montar linha de faturamento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 120]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "COLE_O_LINK_DA_PLANILHA", "mode": "url" },
+        "sheetName": { "__rl": true, "value": "Faturamento", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "c3000000-0000-4000-8000-000000000006",
+      "name": "Planilha: Faturamento",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [720, 120],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets SmartLar" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "pedidos",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [{ "keyName": "numero", "condition": "eq", "keyValue": "={{ $json.pedido }}" }]
+        },
+        "fieldsUi": {
+          "fieldValues": [{ "fieldId": "faturamento_registrado_em", "fieldValue": "={{ $now.toUTC().toISO() }}" }]
+        }
+      },
+      "id": "c3000000-0000-4000-8000-000000000007",
+      "name": "Marcar faturamento registrado",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [960, 120],
+      "credentials": {
+        "supabaseApi": { "id": "", "name": "Supabase SmartLar" }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook: pedido concluído": {
+      "main": [[{ "node": "Buscar pedido concluído", "type": "main", "index": 0 }]]
+    },
+    "Buscar pedido concluído": {
+      "main": [[{ "node": "Montar linha de faturamento", "type": "main", "index": 0 }]]
+    },
+    "A cada 15 min: recuperação": {
+      "main": [[{ "node": "Buscar concluídos sem registro", "type": "main", "index": 0 }]]
+    },
+    "Buscar concluídos sem registro": {
+      "main": [[{ "node": "Montar linha de faturamento", "type": "main", "index": 0 }]]
+    },
+    "Montar linha de faturamento": {
+      "main": [[{ "node": "Planilha: Faturamento", "type": "main", "index": 0 }]]
+    },
+    "Planilha: Faturamento": {
+      "main": [[{ "node": "Marcar faturamento registrado", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "saveManualExecutions": true
+  }
+}

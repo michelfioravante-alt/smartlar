@@ -1,0 +1,96 @@
+{
+  "name": "SmartLar | 2. Alerta diário: instalações de amanhã",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "days", "triggerAtHour": 18, "triggerAtMinute": 0 }]
+        }
+      },
+      "id": "b2000000-0000-4000-8000-000000000001",
+      "name": "Todo dia às 18h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// \"Amanhã\" no fuso de São Paulo, convertido para UTC para consultar o banco.\nconst amanha = $now.setZone('America/Sao_Paulo').plus({ days: 1 }).startOf('day');\nreturn [{\n  json: {\n    inicio_utc: amanha.toUTC().toISO(),\n    fim_utc: amanha.plus({ days: 1 }).toUTC().toISO(),\n    data_label: amanha.toFormat('dd/MM/yyyy')\n  }\n}];"
+      },
+      "id": "b2000000-0000-4000-8000-000000000002",
+      "name": "Calcular amanhã",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "vw_pedidos",
+        "returnAll": true,
+        "filterType": "string",
+        "filterString": "=status=eq.agendado&data_instalacao=gte.{{ $json.inicio_utc }}&data_instalacao=lt.{{ $json.fim_utc }}&order=data_instalacao.asc"
+      },
+      "id": "b2000000-0000-4000-8000-000000000003",
+      "name": "Buscar agendados para amanhã",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [480, 0],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": { "id": "", "name": "Supabase SmartLar" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Uma linha por instalação. Se não houver nenhuma, registra isso (não fica em silêncio).\nconst { data_label } = $('Calcular amanhã').first().json;\nconst agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });\nconst hora = (iso) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });\n\nconst instalacoes = $input.all().filter((i) => i.json.id);\n\nif (instalacoes.length === 0) {\n  return [{\n    json: {\n      executado_em: agora,\n      data_instalacao: data_label,\n      horario: '',\n      pedido: '',\n      cliente: 'Nenhuma instalação agendada para amanhã',\n      endereco: '',\n      tecnico: '',\n      telefone_cliente: ''\n    }\n  }];\n}\n\nreturn instalacoes.map((i) => ({\n  json: {\n    executado_em: agora,\n    data_instalacao: data_label,\n    horario: hora(i.json.data_instalacao),\n    pedido: i.json.numero,\n    cliente: i.json.cliente_nome,\n    endereco: [i.json.cliente_endereco, i.json.cliente_bairro, i.json.cliente_cidade].filter(Boolean).join(', '),\n    tecnico: i.json.tecnico_nome,\n    telefone_cliente: i.json.cliente_telefone\n  }\n}));"
+      },
+      "id": "b2000000-0000-4000-8000-000000000004",
+      "name": "Montar resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "COLE_O_LINK_DA_PLANILHA", "mode": "url" },
+        "sheetName": { "__rl": true, "value": "Alertas instalacoes", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "b2000000-0000-4000-8000-000000000005",
+      "name": "Planilha: Alertas instalacoes",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [960, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets SmartLar" }
+      }
+    }
+  ],
+  "connections": {
+    "Todo dia às 18h": {
+      "main": [[{ "node": "Calcular amanhã", "type": "main", "index": 0 }]]
+    },
+    "Calcular amanhã": {
+      "main": [[{ "node": "Buscar agendados para amanhã", "type": "main", "index": 0 }]]
+    },
+    "Buscar agendados para amanhã": {
+      "main": [[{ "node": "Montar resumo", "type": "main", "index": 0 }]]
+    },
+    "Montar resumo": {
+      "main": [[{ "node": "Planilha: Alertas instalacoes", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo",
+    "saveManualExecutions": true
+  }
+}

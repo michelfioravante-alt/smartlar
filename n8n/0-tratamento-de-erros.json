@@ -1,0 +1,57 @@
+{
+  "name": "SmartLar | 0. Tratamento de erros",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d0000000-0000-4000-8000-000000000001",
+      "name": "Quando um workflow falhar",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $input.first().json;\nreturn [{\n  json: {\n    ocorrido_em: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),\n    workflow: e.workflow?.name ?? '',\n    no: e.execution?.lastNodeExecuted ?? e.trigger?.error?.node?.name ?? '',\n    mensagem: e.execution?.error?.message ?? e.trigger?.error?.message ?? 'Erro sem mensagem'\n  }\n}];"
+      },
+      "id": "d0000000-0000-4000-8000-000000000002",
+      "name": "Montar registro do erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "COLE_O_LINK_DA_PLANILHA", "mode": "url" },
+        "sheetName": { "__rl": true, "value": "Erros", "mode": "name" },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "d0000000-0000-4000-8000-000000000003",
+      "name": "Planilha: Erros",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [480, 0],
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "", "name": "Google Sheets SmartLar" }
+      }
+    }
+  ],
+  "connections": {
+    "Quando um workflow falhar": {
+      "main": [[{ "node": "Montar registro do erro", "type": "main", "index": 0 }]]
+    },
+    "Montar registro do erro": {
+      "main": [[{ "node": "Planilha: Erros", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Sao_Paulo"
+  }
+}
