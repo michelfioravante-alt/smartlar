@@ -188,9 +188,115 @@ Definições dos indicadores (o entrevistador pode perguntar):
   função do histórico podia ser chamada pela API; corrigi tirando a permissão
   (migration 4). Hoje não há alertas.
 
+### 6.1 Segredos fora do GitHub
+
+O repositório é público, então **nenhuma chave ou senha vai para ele**:
+
+| Segredo | Onde fica | Vai pro GitHub? |
+|---|---|---|
+| URL + chave pública do Supabase | `web/.env.local` (no PC) e variáveis de ambiente da Vercel | Não |
+| Chave `service_role` (acesso total) | Só dentro do n8n, como credencial | Não |
+| Senha do Rafael | Pasta `privado/` (ignorada) e documento de entrega | Não |
+
+- O `.gitignore` bloqueia `.env*`, a pasta `privado/` e o PDF do teste.
+- No GitHub vai só um `.env.example` com valores de mentira, para quem for
+  rodar o projeto saber quais variáveis preencher.
+- Antes de cada commit, fiz uma varredura procurando chaves e senhas nos
+  arquivos que iam subir.
+
+**Pergunta provável: "Mas a chave pública não aparece no site?"**
+Sim. A chave *publishable* é feita para ficar no navegador (todo site com
+Supabase funciona assim). O que protege os dados não é esconder essa chave,
+é o **RLS**: sem login, ela não lê nada. A chave perigosa é a `service_role`,
+e essa nunca sai do servidor (n8n).
+
+### 6.2 Cadastro público desligado
+
+O login é só para a equipe da SmartLar. O usuário do Rafael foi criado
+diretamente no Supabase, e o cadastro público ("sign up") fica **desligado**
+nas configurações de autenticação. Sem isso, qualquer pessoa poderia criar uma
+conta pela API e, logada, ver os dados.
+
 ---
 
-## 7. Dados de exemplo
+## 7. Frontend
+
+### 7.1 Tecnologia
+
+- **React + Vite + TypeScript**: React é a mesma base que o Lovable gera e que
+  a IAplicada usa. TypeScript avisa erros de digitação no código antes de ir
+  para o ar (ex.: escrever `clinte_nome` em vez de `cliente_nome`).
+- **Tailwind CSS**: estilos direto no componente, sem gastar tempo com design.
+- **supabase-js**: biblioteca oficial que conversa com o banco.
+- **React Router**: cada tela tem seu endereço (`/clientes`, `/pedidos/123`…),
+  então dá para mandar o link de um pedido.
+
+### 7.2 Telas
+
+| Tela | Endereço | O que usa do banco |
+|---|---|---|
+| Login | `/login` | Supabase Auth |
+| 1. Dashboard | `/` | `dashboard_indicadores()` + `vw_pedidos` |
+| 2. Clientes | `/clientes` | tabela `clientes` (busca por nome ou telefone) + `vw_pedidos` |
+| 3. Produtos | `/produtos` | tabela `produtos` |
+| 4. Novo pedido | `/pedidos/novo` | `criar_pedido()` |
+| 5. Pedidos | `/pedidos` e `/pedidos/:id` | `vw_pedidos`, `itens_pedido`, `historico_status` |
+| 6. Agenda | `/agenda` | `vw_pedidos` filtrado por técnico |
+
+### 7.3 Decisões do frontend
+
+- **A tela mostra só os botões válidos.** Um pedido em orçamento mostra só
+  "Aprovar" e "Cancelar". A lista de transições no frontend
+  (`web/src/lib/tipos.ts`) espelha a do banco, mas é só conforto: se alguém
+  burlar a tela, o banco recusa.
+- **Agendar abre um formulário que obriga técnico e data.** Concluir pede a
+  forma de pagamento se ela ainda não foi definida.
+- **O total aparece ao vivo enquanto se monta o pedido**, calculado em
+  centavos (números inteiros) para não ter erro de arredondamento. Mas é só
+  uma prévia: ao salvar, o banco calcula o valor oficial.
+- **Cadastrar cliente na hora do pedido**: o mesmo formulário da tela de
+  clientes aparece dentro do novo pedido (componente reutilizado).
+- **Um componente só para mudar status** (`MudarStatus`), usado na tela de
+  pedidos e na agenda. A regra fica num lugar só.
+- **Busca por telefone só com números**: o banco guarda uma coluna
+  `telefone_digitos` ("31991234501"), então buscar "99123" encontra
+  "(31) 99123-4501".
+- **Datas sempre no fuso de São Paulo**, mesmo que o navegador esteja em outro.
+
+### 7.4 Organização do código
+
+```
+web/src/
+  lib/          conexão com Supabase, tipos e formatação (moeda, data, telefone)
+  auth/         controle de login
+  components/   peças reutilizáveis (botões, formulário de cliente, mudar status)
+  pages/        uma tela por arquivo
+```
+
+---
+
+### 7.5 Como testei
+
+Rodei um teste automatizado que faz login como o Rafael e executa **as mesmas
+chamadas que as telas fazem**, passando pela segurança real (RLS). Resultado:
+**31 de 31 verificações OK**. Entre elas:
+
+- Sem login, nenhum dado é lido (RLS funcionando).
+- Busca de cliente por nome ("ana") e por telefone só com números ("4503").
+- Pedido com 3 produtos: 2 × R$ 450 + 1 × R$ 180 + 3 × R$ 89,90 = **R$ 1.349,70**.
+- Pedido sem produtos é recusado.
+- Orçamento → concluído é recusado; voltar de status é recusado; cancelar
+  depois de agendado é recusado; agendar sem técnico/data é recusado.
+- Depois de aprovado, não dá para incluir itens.
+- O pedido aparece na agenda do técnico, é iniciado e concluído por lá.
+- O histórico registrou as 5 etapas.
+- O "Faturado no mês" do dashboard aumentou exatamente R$ 1.349,70.
+
+Ao final, o teste apaga os dados que criou, para não sujar o banco.
+
+---
+
+## 8. Dados de exemplo
 
 - 2 técnicos, 11 produtos em 4 categorias, 6 clientes, 11 pedidos.
 - Pedidos em todos os status: 3 orçamentos, 1 aprovado, 3 agendados (2 para
@@ -201,11 +307,13 @@ Definições dos indicadores (o entrevistador pode perguntar):
 
 ---
 
-## 8. Como o projeto está organizado (GitHub)
+## 9. Como o projeto está organizado (GitHub)
 
 ```
 supabase/migrations/   ← cada alteração no banco, em ordem, versionada
 supabase/seed.sql      ← dados de exemplo
+web/                   ← o site (frontend React)
+n8n/                   ← exportação dos workflows de automação
 docs/                  ← este guia e o checklist
 ```
 
@@ -214,7 +322,7 @@ docs/                  ← este guia e o checklist
 
 ---
 
-## 9. Perguntas prováveis na entrevista
+## 10. Perguntas prováveis na entrevista
 
 **"Por que você colocou as regras no banco?"**
 Porque é o único ponto por onde todos os dados passam. Tela, n8n e painel do
@@ -241,12 +349,24 @@ Um pedido tem vários produtos e um produto está em vários pedidos.
 A chave pública fica no site; sem RLS, qualquer um leria os dados. Com RLS,
 só quem está logado.
 
+**"Por que a tela trava os botões se o banco já trava?"**
+Experiência do usuário: o Rafael não deve ver um botão que vai dar erro. Mas
+a garantia é o banco; a tela é a primeira barreira, o banco é a definitiva.
+
+**"Onde estão as chaves do Supabase? O repositório é público."**
+Em `.env.local` (ignorado pelo Git) e nas variáveis de ambiente da Vercel. No
+GitHub só existe um `.env.example` com valores de mentira.
+
+**"Por que criar o pedido por uma função (`criar_pedido`) e não direto na tabela?"**
+Para gravar pedido e itens juntos. Se um item falhar, nada é salvo: não fica
+pedido sem produto e com total zero.
+
 **"O que faria com mais tempo?"**
 (Será completado ao final.)
 
 ---
 
-## 10. Glossário
+## 11. Glossário
 
 | Termo | Significado simples |
 |---|---|
@@ -262,10 +382,14 @@ só quem está logado.
 | RLS | Regra que decide quem pode ver/alterar cada linha |
 | Webhook | Um "aviso" que um sistema manda para outro pela internet |
 | Cron | Agendamento: "rode isso todo dia às 18h" |
+| Frontend | A parte visual, que roda no navegador |
+| Componente | Um "bloco" de tela reutilizável (ex.: o formulário de cliente) |
+| Variável de ambiente | Configuração guardada fora do código (ex.: chaves) |
+| Deploy | Publicar o site na internet |
 
 ---
 
-## 11. Uso de IA (rascunho honesto)
+## 12. Uso de IA (rascunho honesto)
 
 - Usei o Cursor (assistente de IA) para escrever o SQL das tabelas, regras e
   dados de exemplo, e para revisar segurança.
@@ -286,3 +410,7 @@ só quem está logado.
 | 01/10 | `criar_pedido` em transação | Evita pedido sem itens |
 | 01/10 | RLS desde o início | Chave pública fica exposta no site |
 | 01/10 | Frontend em React + Vite no Cursor | Mesma tecnologia do Lovable, controle total e commits limpos |
+| 01/10 | Login obrigatório, usuário criado direto no Supabase | Sistema interno; cadastro público desligado |
+| 01/10 | Segredos só em `.env.local`, Vercel e n8n | Repositório público |
+| 01/10 | Coluna `telefone_digitos` | Buscar telefone digitando só números |
+| 01/10 | Componente único `MudarStatus` | Mesma regra na tela de pedidos e na agenda |

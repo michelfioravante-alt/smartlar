@@ -15,14 +15,16 @@ Legenda: [x] feito · [ ] pendente · (B) = bônus
 - [x] (B) Tabela `historico_status`
 
 ## 3.2 Frontend
-- [ ] Repositório público no GitHub
-- [ ] Tela 1 — Dashboard (4 indicadores + próximas instalações 7 dias + orçamentos aguardando)
-- [ ] Tela 2 — Clientes (cadastro, lista, busca por nome/telefone, ver pedidos do cliente)
-- [ ] Tela 3 — Produtos (por categoria, cadastrar, editar preço)
-- [ ] Tela 4 — Novo pedido (cliente existente ou novo, vários itens, subtotal e total ao vivo, observações, salva como orçamento)
-- [ ] Tela 5 — Gestão de pedidos (filtro por status, detalhes, avançar status, agendar exige técnico + data)
-- [ ] Tela 6 — Agenda dos técnicos (por técnico, marcar em andamento / concluído)
-- [ ] (B) Login com Supabase Auth
+- [x] Repositório público no GitHub
+- [x] Tela 1 — Dashboard (4 indicadores + próximas instalações 7 dias + orçamentos aguardando)
+- [x] Tela 2 — Clientes (cadastro, lista, busca por nome/telefone, ver pedidos do cliente)
+- [x] Tela 3 — Produtos (por categoria, cadastrar, editar preço)
+- [x] Tela 4 — Novo pedido (cliente existente ou novo, vários itens, subtotal e total ao vivo, observações, salva como orçamento)
+- [x] Tela 5 — Gestão de pedidos (filtro por status, detalhes, avançar status, agendar exige técnico + data)
+- [x] Tela 6 — Agenda dos técnicos (por técnico, marcar em andamento / concluído)
+- [x] (B) Login com Supabase Auth
+- [ ] Cadastro público desligado no Supabase (Authentication > Sign In / Providers)
+- [ ] Conferência visual das telas no navegador
 - [ ] (B) Deploy público (Vercel)
 
 ## 3.3 Automações (n8n)
@@ -36,7 +38,7 @@ Legenda: [x] feito · [ ] pendente · (B) = bônus
 - [x] 5+ clientes (6), 6+ produtos em 3 categorias (11 em 4), 8+ pedidos em vários status (11)
 - [x] Cálculo: 2x Câmera (R$ 450) + 1x Sensor (R$ 180) = R$ 1.080 (pedido #1001)
 - [x] Orçamento não pula para concluído (testado: banco recusa)
-- [ ] Front ↔ banco conectados nos dois sentidos
+- [x] Front ↔ banco conectados nos dois sentidos (teste automatizado: 31/31 OK)
 - [ ] Automações disparando com dados reais do banco
 
 ## 5. Entregáveis
